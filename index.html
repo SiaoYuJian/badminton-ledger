@@ -57,6 +57,10 @@
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   th { color: var(--muted); font-weight: 500; }
+  th:first-child, td:first-child {
+    position: sticky; left: 0; z-index: 1; background: var(--card);
+    box-shadow: 1px 0 0 var(--line);
+  }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.pos { color: var(--pos); } td.neg { color: var(--neg); }
   td.note { white-space: normal; color: var(--muted); min-width: 8em; }
