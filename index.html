@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>羽球社儲值金查詢</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7385;
+    --line: #e4e7ee; --accent: #1f6feb; --pos: #137a3f; --neg: #c62828;
+    --neg-bg: #fdecec; --pos-bg: #e8f5ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1b1f29; --text: #e8ebf2; --muted: #98a1b5;
+      --line: #2a3040; --accent: #6aa4ff; --pos: #5fd08a; --neg: #ff7b7b;
+      --neg-bg: #3a1f22; --pos-bg: #1c3326;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  form { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; font: inherit; padding: 12px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  button {
+    font: inherit; font-weight: 600; padding: 12px 18px; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  .msg { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+  .msg.err { color: var(--neg); }
+  .balance-label { color: var(--muted); font-size: 14px; }
+  .balance { font-size: 40px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .balance.pos { color: var(--pos); } .balance.neg { color: var(--neg); }
+  .badge { display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 999px; font-size: 14px; }
+  .badge.pos { background: var(--pos-bg); color: var(--pos); }
+  .badge.neg { background: var(--neg-bg); color: var(--neg); }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+  .stat { border-top: 1px solid var(--line); padding-top: 8px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 16px; margin: 0 0 8px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.pos { color: var(--pos); } td.neg { color: var(--neg); }
+  td.note { white-space: normal; color: var(--muted); min-width: 8em; }
+  .foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>羽球社儲值金查詢</h1>
+  <p class="sub">輸入你的姓名,查看 2026 年的打球記錄、費用與剩餘儲值金。</p>
+
+  <section class="card">
+    <form id="form" autocomplete="off">
+      <input type="text" id="name" placeholder="請輸入姓名" aria-label="姓名" required>
+      <button type="submit" id="go">查詢</button>
+    </form>
+    <p class="msg" id="msg" role="status" hidden></p>
+  </section>
+
+  <div id="result" hidden>
+    <section class="card">
+      <div class="balance-label"><span id="who"></span> 目前剩餘儲值金</div>
+      <div class="balance" id="balance"></div>
+      <span class="badge" id="badge"></span>
+      <div class="stats">
+        <div class="stat"><b id="sOpening"></b><span>年初結轉</span></div>
+        <div class="stat"><b id="sTopups"></b><span>本年累計儲值</span></div>
+        <div class="stat"><b id="sFees"></b><span>本年累計場地費</span></div>
+        <div class="stat"><b id="sSessions"></b><span>打球次數</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>明細(新到舊)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日期</th><th>項目</th><th>地點</th><th class="num">金額</th><th>備註</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot" id="asOf"></p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var LABEL = { opening: "年初結轉", topup: "儲值", fee: "場地費" };
+
+  // 必須與 scripts/build_data.py 的 normalize_name / name_hash 一致
+  function normalizeName(s) { return s.normalize("NFKC").trim(); }
+  async function nameHash(salt, name) {
+    var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + normalizeName(name)));
+    return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  function money(n) {
+    var v = Math.round(n * 10) / 10;
+    return "NT$ " + v.toLocaleString("zh-TW", { maximumFractionDigits: 1 });
+  }
+  function signed(n) {
+    var v = Math.round(n * 10) / 10;
+    return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toLocaleString("zh-TW", { maximumFractionDigits: 1 });
+  }
+  function showMsg(text, isErr) {
+    var m = $("msg"); m.textContent = text; m.className = "msg" + (isErr ? " err" : ""); m.hidden = !text;
+  }
+  function getJSON(url) {
+    return fetch(url, { cache: "no-cache" }).then(function (r) {
+      if (!r.ok) { var e = new Error("HTTP " + r.status); e.status = r.status; throw e; }
+      return r.json();
+    });
+  }
+
+  var metaPromise = null;
+  function loadMeta() { return metaPromise || (metaPromise = getJSON("data/meta.json")); }
+
+  function render(d) {
+    $("who").textContent = d.name;
+    var b = $("balance");
+    b.textContent = money(d.balance);
+    b.className = "balance " + (d.balance < 0 ? "neg" : "pos");
+    var badge = $("badge");
+    badge.className = "badge " + (d.balance < 0 ? "neg" : "pos");
+    badge.textContent = d.balance < 0 ? "儲值金不足,請記得補儲值" : "儲值金充足";
+    $("sOpening").textContent = money(d.summary.opening);
+    $("sTopups").textContent = money(d.summary.topups);
+    $("sFees").textContent = money(Math.abs(d.summary.fees));
+    $("sSessions").textContent = d.summary.sessions + " 次";
+
+    var tbody = $("rows");
+    tbody.textContent = "";
+    d.records.slice().reverse().forEach(function (r) {
+      var tr = document.createElement("tr");
+      var cells = [
+        [r.date, ""],
+        [LABEL[r.type] || r.type, ""],
+        [r.location, ""],
+        [signed(r.amount), "num " + (r.amount < 0 ? "neg" : "pos")],
+        [(r.weight != null && r.weight !== 1 ? "權重 " + r.weight + (r.note ? ";" : "") : "") + r.note, "note"]
+      ];
+      cells.forEach(function (c) {
+        var td = document.createElement("td");
+        td.textContent = c[0];
+        if (c[1]) td.className = c[1];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    $("result").hidden = false;
+    $("asOf").textContent = "資料更新至 " + d.asOf + "。金額為四捨五入顯示,實際以帳本為準。";
+  }
+
+  async function search(raw) {
+    var name = normalizeName(raw);
+    if (!name) return;
+    $("result").hidden = true;
+    $("go").disabled = true;
+    showMsg("查詢中…", false);
+    try {
+      var meta = await loadMeta();
+      var d = await getJSON("data/" + (await nameHash(meta.salt, name)) + ".json");
+      showMsg("", false);
+      render(d);
+      try { localStorage.setItem("lastName", name); } catch (e) {}
+    } catch (e) {
+      if (e.status === 404) showMsg("找不到「" + name + "」。請確認姓名是否正確(需與社團帳本上的名字一致)。", true);
+      else showMsg("讀取資料失敗,請稍後再試。(" + e.message + ")", true);
+    } finally {
+      $("go").disabled = false;
+    }
+  }
+
+  $("form").addEventListener("submit", function (ev) { ev.preventDefault(); search($("name").value); });
+
+  loadMeta().then(function (m) { $("asOf").textContent = "資料更新至 " + m.asOf; }).catch(function () {});
+  try {
+    var last = localStorage.getItem("lastName");
+    if (last) $("name").value = last;
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
