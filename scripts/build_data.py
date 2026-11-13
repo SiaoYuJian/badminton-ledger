@@ -171,9 +171,13 @@ def main():
         (args.out / f"{name_hash(salt, name)}.json").write_text(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
+    # 資料產生時間(台灣時間),前端顯示「最後更新」
+    tz = datetime.timezone(datetime.timedelta(hours=8))
+    updated_at = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M")
+
     # meta 不含任何姓名,只給前端 salt 與更新日期
     (args.out / "meta.json").write_text(
-        json.dumps({"salt": salt, "asOf": as_of}, ensure_ascii=False), encoding="utf-8")
+        json.dumps({"salt": salt, "asOf": as_of, "updatedAt": updated_at}, ensure_ascii=False), encoding="utf-8")
 
     print(f"完成:{len(records)} 位社員,資料至 {as_of},輸出到 {args.out}")
     if skipped:

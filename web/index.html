@@ -74,7 +74,7 @@
 <body>
 <main>
   <h1>羽球社儲值金查詢</h1>
-  <p class="sub">輸入你的姓名,查看 2026 年的打球記錄、費用與剩餘儲值金。</p>
+  <p class="sub">輸入你的姓名,查看 2026 年的打球記錄、費用與剩餘儲值金。<br><span id="updated"></span></p>
 
   <section class="card">
     <form id="form" autocomplete="off">
@@ -172,7 +172,7 @@
     current = d;
     renderRows();
     $("result").hidden = false;
-    $("asOf").textContent = "資料更新至 " + d.asOf + "。金額為四捨五入顯示,實際以帳本為準。";
+    $("asOf").textContent = "金額為四捨五入顯示,實際以帳本為準。";
   }
 
   var current = null;
@@ -228,7 +228,9 @@
 
   $("form").addEventListener("submit", function (ev) { ev.preventDefault(); search($("name").value); });
 
-  loadMeta().then(function (m) { $("asOf").textContent = "資料更新至 " + m.asOf; }).catch(function () {});
+  loadMeta().then(function (m) {
+    $("updated").textContent = "最後更新:" + (m.updatedAt || m.asOf) + "(帳本記錄至 " + m.asOf + ")";
+  }).catch(function () {});
   try {
     var so = localStorage.getItem("sortOrder");
     if (so === "asc" || so === "desc") $("sort").value = so;
