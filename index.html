@@ -57,6 +57,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
   td.date { white-space: nowrap; }
+  .subtext { color: var(--muted); font-size: 11px; font-weight: 400; }
   td.kind { color: var(--muted); }
   td.amt { white-space: nowrap; font-weight: 600; }
   th { color: var(--muted); font-weight: 500; }
@@ -109,7 +110,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>地點/項目</th><th class="num">當次人數</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
+          <thead><tr><th>日期</th><th>地點/項目</th><th class="num">權重總額</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -187,15 +188,21 @@
       var cells = [
         [r.date.slice(5).replace("-", "/"), "date"],
         [r.type === "fee" ? r.location : LABEL[r.type], r.type === "fee" ? "" : "kind"],
-        [r.sessionPeople != null ? String(r.sessionPeople) : "", "num"],
+        [r.sessionWeight != null ? plain(r.sessionWeight) : "", "num", r.sessionPeople != null ? r.sessionPeople + " 人" + (r.sessionDropIns ? "(零打 " + r.sessionDropIns + ")" : "") : ""],
         [r.sessionTotal != null ? plain(r.sessionTotal) : "", "num"],
         [signed(r.amount), "num amt " + (r.amount < 0 ? "neg" : "pos")],
-        [(r.weight != null && r.weight !== 1 ? "權重 " + r.weight + (r.note ? ";" : "") : "") + r.note, "note"]
+        [[r.dropIn ? "零打固定 100 元" : "", (r.weight != null && r.weight !== 1) ? "權重 " + r.weight : "", r.note].filter(Boolean).join(";"), "note"]
       ];
       cells.forEach(function (c) {
         var td = document.createElement("td");
         td.textContent = c[0];
         if (c[1]) td.className = c[1];
+        if (c[2]) {
+          var sub = document.createElement("div");
+          sub.className = "subtext";
+          sub.textContent = c[2];
+          td.appendChild(sub);
+        }
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
