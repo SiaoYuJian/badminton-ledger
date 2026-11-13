@@ -97,19 +97,23 @@ def main():
     # 欄位:A日期 B人員 C金額 D類型 E地點 F權重 G備註
     records = defaultdict(list)
     skipped = []
+    session = None  # 目前場次:{"total": 整場場地費, "fees": [該場的支出紀錄]}
     for rownum, c in read_sheet(args.xlsx, args.sheet):
         if rownum == 1:
             continue  # 標題列
         person, amount = c.get("B"), to_float(c.get("C"))
         if not person:
-            continue  # 場次總表頭(無人員)或空白列
+            # 場次總表頭:無人員、類型=支出、金額=整場場地費;其後的支出列都屬於這一場
+            if c.get("D") == "支出" and to_float(c.get("C")) is not None:
+                session = {"total": round(to_float(c["C"]), 2), "fees": []}
+            continue  # 表頭或空白列都不是個人紀錄
         kind = c.get("D")
         date = to_float(c.get("A"))
         if kind not in TYPE_LABEL or amount is None or date is None:
             skipped.append((rownum, person, c.get("A"), c.get("C"), kind))
             continue
         weight = to_float(c.get("F"))
-        records[normalize_name(person)].append({
+        rec = {
             "date": (EXCEL_EPOCH + datetime.timedelta(days=int(date))).isoformat(),
             "type": TYPE_LABEL[kind],
             "amount": round(amount, 2),
@@ -117,10 +121,22 @@ def main():
             "weight": weight if kind == "支出" and weight is not None else None,
             "note": c.get("G") or "",
             "_row": rownum,
-        })
+        }
+        if kind == "支出" and session is not None:
+            session["fees"].append(rec)
+            rec["_session"] = session
+        records[normalize_name(person)].append(rec)
 
     if not records:
         sys.exit("沒有讀到任何人員資料,請確認工作表與欄位。")
+
+    # 每筆場地費附上該場總人數與整場場地費,方便前端核對有沒有扣錯
+    for rs in records.values():
+        for r in rs:
+            sess = r.pop("_session", None)
+            if sess:
+                r["sessionPeople"] = len(sess["fees"])
+                r["sessionTotal"] = sess["total"]
 
     all_dates = [r["date"] for rs in records.values() for r in rs if r["type"] != "opening"]
     as_of = max(all_dates) if all_dates else ""

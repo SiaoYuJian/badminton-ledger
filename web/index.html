@@ -49,7 +49,10 @@
   .stat { border-top: 1px solid var(--line); padding-top: 8px; }
   .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
   .stat span { color: var(--muted); font-size: 13px; }
-  h2 { font-size: 16px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 0; }
+  .head-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .sort { color: var(--muted); font-size: 14px; }
+  .sort select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; margin-left: 4px; }
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -88,10 +91,18 @@
     </section>
 
     <section class="card">
-      <h2>明細(新到舊)</h2>
+      <div class="head-row">
+        <h2>明細</h2>
+        <label class="sort">日期排序
+          <select id="sort">
+            <option value="desc" selected>新到舊</option>
+            <option value="asc">舊到新</option>
+          </select>
+        </label>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>項目</th><th>地點</th><th class="num">金額</th><th>備註</th></tr></thead>
+          <thead><tr><th>日期</th><th>項目</th><th>地點</th><th class="num">金額</th><th class="num">當次人數</th><th class="num">當次場地費</th><th>備註</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -148,15 +159,28 @@
     $("sFees").textContent = money(Math.abs(d.summary.fees));
     $("sSessions").textContent = d.summary.sessions + " 次";
 
+    current = d;
+    renderRows();
+    $("result").hidden = false;
+    $("asOf").textContent = "資料更新至 " + d.asOf + "。金額為四捨五入顯示,實際以帳本為準。";
+  }
+
+  var current = null;
+  function renderRows() {
+    if (!current) return;
     var tbody = $("rows");
     tbody.textContent = "";
-    d.records.slice().reverse().forEach(function (r) {
+    var list = current.records.slice();  // 資料本身已是舊到新
+    if ($("sort").value === "desc") list.reverse();
+    list.forEach(function (r) {
       var tr = document.createElement("tr");
       var cells = [
         [r.date, ""],
         [LABEL[r.type] || r.type, ""],
         [r.location, ""],
         [signed(r.amount), "num " + (r.amount < 0 ? "neg" : "pos")],
+        [r.sessionPeople != null ? r.sessionPeople + " 人" : "", "num"],
+        [r.sessionTotal != null ? money(r.sessionTotal) : "", "num"],
         [(r.weight != null && r.weight !== 1 ? "權重 " + r.weight + (r.note ? ";" : "") : "") + r.note, "note"]
       ];
       cells.forEach(function (c) {
@@ -167,9 +191,11 @@
       });
       tbody.appendChild(tr);
     });
-    $("result").hidden = false;
-    $("asOf").textContent = "資料更新至 " + d.asOf + "。金額為四捨五入顯示,實際以帳本為準。";
   }
+  $("sort").addEventListener("change", function () {
+    renderRows();
+    try { localStorage.setItem("sortOrder", $("sort").value); } catch (e) {}
+  });
 
   async function search(raw) {
     var name = normalizeName(raw);
@@ -195,6 +221,8 @@
 
   loadMeta().then(function (m) { $("asOf").textContent = "資料更新至 " + m.asOf; }).catch(function () {});
   try {
+    var so = localStorage.getItem("sortOrder");
+    if (so === "asc" || so === "desc") $("sort").value = so;
     var last = localStorage.getItem("lastName");
     if (last) $("name").value = last;
   } catch (e) {}
