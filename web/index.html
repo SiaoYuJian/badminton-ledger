@@ -54,8 +54,11 @@
   .sort { color: var(--muted); font-size: 14px; }
   .sort select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; margin-left: 4px; }
   .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.date { white-space: nowrap; }
+  td.kind { color: var(--muted); }
+  td.amt { white-space: nowrap; font-weight: 600; }
   th { color: var(--muted); font-weight: 500; }
   th:first-child, td:first-child {
     position: sticky; left: 0; z-index: 1; background: var(--card);
@@ -63,7 +66,7 @@
   }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.pos { color: var(--pos); } td.neg { color: var(--neg); }
-  td.note { white-space: normal; color: var(--muted); min-width: 8em; }
+  td.note { color: var(--muted); }
   .foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
   [hidden] { display: none !important; }
 </style>
@@ -106,7 +109,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>項目</th><th>地點</th><th class="num">當次人數</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
+          <thead><tr><th>日期</th><th>地點/項目</th><th class="num">當次人數</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -132,6 +135,9 @@
   function money(n) {
     var v = Math.round(n * 10) / 10;
     return "NT$ " + v.toLocaleString("zh-TW", { maximumFractionDigits: 1 });
+  }
+  function plain(n) {
+    return (Math.round(n * 10) / 10).toLocaleString("zh-TW", { maximumFractionDigits: 1 });
   }
   function signed(n) {
     var v = Math.round(n * 10) / 10;
@@ -179,12 +185,11 @@
     list.forEach(function (r) {
       var tr = document.createElement("tr");
       var cells = [
-        [r.date, ""],
-        [LABEL[r.type] || r.type, ""],
-        [r.location, ""],
-        [r.sessionPeople != null ? r.sessionPeople + " 人" : "", "num"],
-        [r.sessionTotal != null ? money(r.sessionTotal) : "", "num"],
-        [signed(r.amount), "num " + (r.amount < 0 ? "neg" : "pos")],
+        [r.date.slice(5).replace("-", "/"), "date"],
+        [r.type === "fee" ? r.location : LABEL[r.type], r.type === "fee" ? "" : "kind"],
+        [r.sessionPeople != null ? String(r.sessionPeople) : "", "num"],
+        [r.sessionTotal != null ? plain(r.sessionTotal) : "", "num"],
+        [signed(r.amount), "num amt " + (r.amount < 0 ? "neg" : "pos")],
         [(r.weight != null && r.weight !== 1 ? "權重 " + r.weight + (r.note ? ";" : "") : "") + r.note, "note"]
       ];
       cells.forEach(function (c) {
