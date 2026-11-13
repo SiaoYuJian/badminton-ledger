@@ -130,13 +130,33 @@ def main():
     if not records:
         sys.exit("沒有讀到任何人員資料,請確認工作表與欄位。")
 
-    # 每筆場地費附上該場總人數與整場場地費,方便前端核對有沒有扣錯
+    # 帳本規則:個人場地費 = 整場場地費 ÷ 權重總額 × 該人權重(權重空白視為 1)。
+    # 非員工零打固定收 100 元(不照均攤),但仍算 1 個權重、計入分母。
+    check_issues = []
+    for sess in {id(r["_session"]): r["_session"] for rs in records.values() for r in rs if "_session" in r}.values():
+        w = lambda r: r["weight"] if r["weight"] is not None else 1.0
+        sess["weight_sum"] = round(sum(w(r) for r in sess["fees"]), 4)
+        unit = sess["total"] / sess["weight_sum"]
+        sess["drop_ins"] = 0
+        for r in sess["fees"]:
+            expected = -unit * w(r)
+            if abs(r["amount"] - expected) <= 0.01:
+                continue
+            if abs(r["amount"] + 100) <= 0.01:
+                r["dropIn"] = True
+                sess["drop_ins"] += 1
+            else:
+                check_issues.append((r["date"], r["_row"], r["amount"], round(expected, 2)))
+
+    # 每筆場地費附上該場總人數、權重總額與整場場地費,方便前端核對有沒有扣錯
     for rs in records.values():
         for r in rs:
             sess = r.pop("_session", None)
             if sess:
                 r["sessionPeople"] = len(sess["fees"])
                 r["sessionTotal"] = sess["total"]
+                r["sessionWeight"] = sess["weight_sum"]
+                r["sessionDropIns"] = sess["drop_ins"]
 
     all_dates = [r["date"] for rs in records.values() for r in rs if r["type"] != "opening"]
     as_of = max(all_dates) if all_dates else ""
@@ -184,6 +204,10 @@ def main():
         print(f"注意:略過 {len(skipped)} 列(有人員但日期/金額/類型不完整):")
         for s in skipped:
             print("  列", s)
+    if check_issues:
+        print(f"\n注意:{len(check_issues)} 筆場地費不符「總額÷權重總額×權重」,也不是零打 100 元(日期, 列, 實扣, 應扣):")
+        for i in check_issues:
+            print("  ", i)
     # 供人工核對:餘額由小到大
     print("\n餘額最低 5 位:", sorted(balances.items(), key=lambda kv: kv[1])[:5])
 
