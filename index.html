@@ -57,7 +57,10 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
   td.date { white-space: nowrap; }
-  .subtext { color: var(--muted); font-size: 11px; font-weight: 400; }
+  tr.expandable { cursor: pointer; }
+  tr.expandable:hover td { background: var(--bg); }
+  .chev { color: var(--accent); font-size: 10px; margin-left: 2px; }
+  tr.detail td { position: static; box-shadow: none; background: var(--bg); color: var(--muted); font-size: 12px; line-height: 1.7; padding: 8px; white-space: normal; }
   td.kind { color: var(--muted); }
   td.amt { white-space: nowrap; font-weight: 600; }
   th { color: var(--muted); font-weight: 500; }
@@ -110,7 +113,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>日期</th><th>地點/項目</th><th class="num">權重總額</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
+          <thead><tr><th>日期</th><th>地點/項目</th><th class="num">當次人數</th><th class="num">當次場地費</th><th class="num">金額</th><th>備註</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -185,28 +188,78 @@
     if ($("sort").value === "desc") list.reverse();
     list.forEach(function (r) {
       var tr = document.createElement("tr");
+      var isFee = r.type === "fee" && r.sessionTotal != null;
       var cells = [
         [r.date.slice(5).replace("-", "/"), "date"],
         [r.type === "fee" ? r.location : LABEL[r.type], r.type === "fee" ? "" : "kind"],
-        [r.sessionWeight != null ? plain(r.sessionWeight) : "", "num", r.sessionPeople != null ? r.sessionPeople + " 人" + (r.sessionDropIns ? "(零打 " + r.sessionDropIns + ")" : "") : ""],
-        [r.sessionTotal != null ? plain(r.sessionTotal) : "", "num"],
+        [isFee ? String(r.sessionPeople) : "", "num"],
+        [isFee ? plain(r.sessionTotal) : "", "num"],
         [signed(r.amount), "num amt " + (r.amount < 0 ? "neg" : "pos")],
-        [[r.dropIn ? "零打固定 100 元" : "", (r.weight != null && r.weight !== 1) ? "權重 " + r.weight : "", r.note].filter(Boolean).join(";"), "note"]
+        [r.note, "note"]
       ];
-      cells.forEach(function (c) {
+      cells.forEach(function (c, i) {
         var td = document.createElement("td");
         td.textContent = c[0];
         if (c[1]) td.className = c[1];
-        if (c[2]) {
-          var sub = document.createElement("div");
-          sub.className = "subtext";
-          sub.textContent = c[2];
-          td.appendChild(sub);
+        if (isFee && i === 2) {
+          var chev = document.createElement("span");
+          chev.className = "chev";
+          chev.textContent = "▸";
+          td.appendChild(chev);
         }
         tr.appendChild(td);
       });
+      if (isFee) {
+        tr.className = "expandable";
+        tr.tabIndex = 0;
+        tr.setAttribute("role", "button");
+        tr.setAttribute("aria-expanded", "false");
+        tr.title = "點一下查看計算方式";
+        var toggle = function () { toggleDetail(tr, r); };
+        tr.addEventListener("click", toggle);
+        tr.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
+        });
+      }
       tbody.appendChild(tr);
     });
+  }
+
+  function fmt2(n) { return n.toLocaleString("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  // 點開一列場地費,顯示完整的計算方式
+  function toggleDetail(tr, r) {
+    var next = tr.nextSibling;
+    if (next && next.className === "detail") {
+      next.remove();
+      tr.setAttribute("aria-expanded", "false");
+      tr.querySelector(".chev").textContent = "▸";
+      return;
+    }
+    var w = r.weight != null ? r.weight : 1;
+    var unit = r.sessionTotal / r.sessionWeight;
+    var expected = unit * w;
+    var lines = [
+      "當次共 " + r.sessionPeople + " 人" + (r.sessionDropIns ? "(其中零打 " + r.sessionDropIns + " 人)" : "") + ",場地費 NT$ " + plain(r.sessionTotal),
+      "權重總額 " + plain(r.sessionWeight) + "(早走或晚到的人以 0.5 等權重計算)",
+      "每 1 權重 = " + plain(r.sessionTotal) + " ÷ " + plain(r.sessionWeight) + " = " + fmt2(unit),
+      "你的權重 " + w + (r.weight == null ? "(帳本未填,視為 1)" : "")
+    ];
+    if (r.dropIn) lines.push("零打:固定收 100 元,不照均攤(仍計入上方人數與權重總額)。");
+    else lines.push("應扣 " + fmt2(unit) + " × " + w + " = " + fmt2(expected) + (Math.abs(expected + r.amount) <= 0.01 ? ",與實扣相符" : ",實扣 " + fmt2(-r.amount) + "(與公式不同,請以帳本備註為準)"));
+    var d = document.createElement("tr");
+    d.className = "detail";
+    var td = document.createElement("td");
+    td.colSpan = 6;
+    lines.forEach(function (t) {
+      var div = document.createElement("div");
+      div.textContent = t;
+      td.appendChild(div);
+    });
+    d.appendChild(td);
+    tr.after(d);
+    tr.setAttribute("aria-expanded", "true");
+    tr.querySelector(".chev").textContent = "▾";
   }
   $("sort").addEventListener("change", function () {
     renderRows();
